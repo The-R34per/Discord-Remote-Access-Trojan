@@ -7,6 +7,8 @@ This project is a **Discord‑controlled remote command execution bot**.
 
 The bot connects to a Discord server, creates a channel named after the host machine’s public IP, and executes PowerShell commands sent through that channel. Output is returned directly to Discord.
 
+NOTE: This program **will work** if you have a network that restricts imbound/internal SSH, due to the use of an external API (Discord Token).
+
 This project is intended **strictly for educational use in controlled environments**.
 
 ---
