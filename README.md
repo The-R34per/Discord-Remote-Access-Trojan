@@ -34,6 +34,7 @@ The author is **not responsible** for any misuse or damage caused by this projec
 - Streams command output back to Discord  
 - Graceful shutdown command (`shutdown`)  
 - Hidden PowerShell window using `CREATE_NO_WINDOW`
+- API web server for uploading files from victim's computer
 
 ---
 
@@ -43,7 +44,8 @@ The author is **not responsible** for any misuse or damage caused by this projec
 3. It launches a persistent PowerShell subprocess.  
 4. Any message sent in the channel is treated as a PowerShell command.  
 5. Output is captured and returned to Discord in chunks (max 2000 characters).  
-6. Sending `shutdown` terminates the bot.
+6. Sending `shutdown` terminates the bot, and activates supervisor script.
+7. Sending `hard-shutdown` terminates all scripts completly.
 
 ---
 
