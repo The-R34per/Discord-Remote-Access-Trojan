@@ -396,7 +396,7 @@ async def on_message(message):
 
 
 if not os.path.exists(TARGET_DIR):
-    os.makedirs(TARGET_DIR, exit_ok=True)
+    os.makedirs(TARGET_DIR, exist_ok=True)
 
 update_state("running")
 client.run(DISCORD_TOKEN)
